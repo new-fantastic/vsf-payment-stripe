@@ -135,6 +135,8 @@ export default {
 <style lang="scss" scoped>
 
   .vsf-stripe-container {
+    margin: 3rem 0 4rem 0;
+
     label {
       font-weight: 500;
       font-size: 14px;
