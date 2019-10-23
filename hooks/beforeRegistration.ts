@@ -3,7 +3,7 @@ export function beforeRegistration(Vue, config, store, isServer) {
   const VSF_PAYMENT_CODE = 'stripe'
 
   store.dispatch('payment/addMethod', {
-    'title': 'Stripe',
+    'title': 'Credit or debit card (Stripe)',
     'code': VSF_PAYMENT_CODE,
     'cost': 0,
     'costInclTax': 0,

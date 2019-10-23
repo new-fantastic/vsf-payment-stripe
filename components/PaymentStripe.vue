@@ -3,7 +3,7 @@
   <div class="mb15 mt20 vsf-stripe-container">
     <h4 class="mt0">
       <label for="vsf-stripe-card-element">
-        Credit/debit card
+        Credit or debit card
       </label>
     </h4>
     <div class="bg-cl-secondary px20 py20">
