@@ -3,12 +3,12 @@ export function beforeRegistration({ Vue, config, store, isServer }) {
   const VSF_PAYMENT_CODE = config.stripe.paymentMethodCode || 'stripe'
 
   store.dispatch('payment/addMethod', {
-    'title': 'Credit or debit card (Stripe)',
+    'title': 'Credit/debit card',
     'code': VSF_PAYMENT_CODE,
     'cost': 0,
     'costInclTax': 0,
     'default': false,
-    'offline': false
+    'offline': true
   })
 
   if (!isServer) {
