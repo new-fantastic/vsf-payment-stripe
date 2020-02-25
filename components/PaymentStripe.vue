@@ -40,7 +40,8 @@ export default {
         instance: null,
         elements: null,
         card: null
-      }
+      },
+      processing: false
     }
   },
   computed: {
@@ -67,7 +68,7 @@ export default {
 
     // Ready to place order, handle anything we need to, generating, validating stripe requests & tokens ect.
     this.$bus.$on('checkout-payment-method-changed', (paymentMethodCode) => {
-      if (paymentMethodCode !== 'stripe') {
+      if (paymentMethodCode !== this.stripeConfig.paymentMethodCode) {
         // unregister the extension placeorder handler
         this.$bus.$off('checkout-before-placeOrder', this.onBeforePlaceOrder)
       }
@@ -79,6 +80,9 @@ export default {
       this.$bus.$emit('notification-progress-stop')
     },
     onBeforePlaceOrder () {
+      if (this.processing) {
+        return
+      }
       this.processStripeForm()
     },
     loadStripeDependencies (callback) {
@@ -138,6 +142,7 @@ export default {
 
       // Start display loader
       this.$bus.$emit('notification-progress-start', [i18n.t('Placing Order'), '...'].join(''))
+      this.processing = true
       // Create payment method with Stripe
       this.stripe.instance.createPaymentMethod({
         type: 'card',
@@ -163,6 +168,7 @@ export default {
 
           // Stop display loader
           this.$bus.$emit('notification-progress-stop')
+          this.processing = false
         } else {
           let clientSecret = await this.fetchClientSecret(self.formatTokenPayload(cardResult.paymentMethod))
           if (!clientSecret) {
@@ -171,6 +177,7 @@ export default {
               message: this.$t('Could not fetch client secret, sorry'),
               action1: { label: this.$t('OK') }
             })
+            this.processing = false
             return
           }
 
@@ -186,10 +193,11 @@ export default {
 
               // Stop display loader 
               self.$bus.$emit('notification-progress-stop')
+              this.processing = false
             } else {
               self.placeOrderWithPayload(this.formatTokenPayload(cardResult.paymentMethod))
               // console.log(cardResult)
-              
+              // this.processing = false
             }
           })
         }
