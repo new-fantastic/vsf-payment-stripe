@@ -44,8 +44,16 @@ export default {
   computed: mapState({
     stripeConfig: state => state.config.stripe
   }),
+  beforeMount () {
+    this.$bus.$on('order-after-placed', this.onAfterPlaceOrder)
+  },
+  beforeDestroy () {
+    this.$bus.$off('order-after-placed', this.onAfterPlaceOrder)
+  },
   mounted () {
-    this.configureStripe()
+    // Load the stripe.js elements script.
+    // As it's callback, Configure stripe to run.
+    this.loadStripeDependencies(this.configureStripe)
 
     // Ready to place order, handle anything we need to, generating, validating stripe requests & tokens ect.
     this.$bus.$on('checkout-before-placeOrder', this.onBeforePlaceOrder)
@@ -59,8 +67,24 @@ export default {
     })
   },
   methods: {
+    onAfterPlaceOrder () {
+      // Stop display loader
+      this.$bus.$emit('notification-progress-stop')
+    },
     onBeforePlaceOrder () {
       this.processStripeForm()
+    },
+    loadStripeDependencies (callback) {
+      let stripeJsUrl = 'https://js.stripe.com/v3/'
+      let docHead = document.getElementsByTagName('head')[0]
+      let docScript = document.createElement('script')
+      docScript.type = 'text/javascript'
+      docScript.src = stripeJsUrl
+
+      // When script is ready fire our callback.
+      docScript.onreadystatechange = callback
+      docScript.onload = callback
+      docHead.appendChild(docScript)
     },
     configureStripe () {
       if (!this.stripeConfig.hasOwnProperty('apiKey')) {
@@ -105,7 +129,7 @@ export default {
     processStripeForm () {
       let self = this
 
-      // Display loader
+      // Start display loader
       this.$bus.$emit('notification-progress-start', [i18n.t('Placing Order'), '...'].join(''))
 
       // Create payment method with Stripe
@@ -115,10 +139,12 @@ export default {
           let errorElement = document.getElementById('vsf-stripe-card-errors')
 
           errorElement.textContent = result.error.message
+
+          // Stop display loader
+          this.$bus.$emit('notification-progress-stop')
         } else {
           self.placeOrderWithPayload(this.formatTokenPayload(result.paymentMethod))
         }
-        self.$bus.$emit('notification-progress-stop')
       })
     },
     placeOrderWithPayload (payload) {
