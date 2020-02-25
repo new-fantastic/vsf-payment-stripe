@@ -14,7 +14,8 @@ export function beforeRegistration({ Vue, config, store, isServer }) {
   if (!isServer) {
 
     store.watch((state) => state.checkout.paymentDetails, (prevMethodCode, newMethodCode) => {
-      let method = (newMethodCode === VSF_PAYMENT_CODE) ? '$on' : '$off'
+      const realNewMethodCode = typeof newMethodCode === 'string' ? newMethodCode : newMethodCode.paymentMethod
+      let method = (realNewMethodCode === VSF_PAYMENT_CODE) ? '$on' : '$off'
       // Register/unregister the handler for what happens when they click the place order button.
       Vue.prototype.$bus[method]('checkout-before-placeOrder', () => {
           Vue.prototype.$bus.$emit('checkout-do-placeOrder', {})

@@ -29,6 +29,8 @@
 <script>
 import { mapState } from 'vuex'
 import i18n from '@vue-storefront/i18n'
+import config from 'config'
+import { adjustMultistoreApiUrl } from '@vue-storefront/core/lib/multistore'
 
 export default {
   name: 'PaymentStripe',
@@ -41,16 +43,21 @@ export default {
       }
     }
   },
-  computed: mapState({
-    stripeConfig: state => state.config.stripe
-  }),
+  computed: {
+    ...mapState({
+      stripeConfig: state => state.config.stripe
+    }),
+    checkout () {
+      return this.$store.state.checkout
+    }
+  },
   beforeMount () {
     this.$bus.$on('order-after-placed', this.onAfterPlaceOrder)
   },
   beforeDestroy () {
     this.$bus.$off('order-after-placed', this.onAfterPlaceOrder)
   },
-  mounted () {
+  mounted () { 
     // Load the stripe.js elements script.
     // As it's callback, Configure stripe to run.
     this.loadStripeDependencies(this.configureStripe)
@@ -64,7 +71,7 @@ export default {
         // unregister the extension placeorder handler
         this.$bus.$off('checkout-before-placeOrder', this.onBeforePlaceOrder)
       }
-    })
+    }) 
   },
   methods: {
     onAfterPlaceOrder () {
@@ -126,24 +133,65 @@ export default {
     unbindEventListeners () {
       this.stripe.card.removeEventListener('change', this.onStripeCardChange)
     },
-    processStripeForm () {
+    async processStripeForm () {
       let self = this
 
       // Start display loader
       this.$bus.$emit('notification-progress-start', [i18n.t('Placing Order'), '...'].join(''))
-
       // Create payment method with Stripe
-      this.stripe.instance.createPaymentMethod('card', this.stripe.card).then((result) => {
-        if (result.error) {
+      this.stripe.instance.createPaymentMethod({
+        type: 'card',
+        card: this.stripe.card,
+        billing_details: {
+          address: {
+            city: this.checkout.paymentDetails.city,
+            country: this.checkout.paymentDetails.country,
+            line1: this.checkout.paymentDetails.streetAddress,
+            line2: this.checkout.paymentDetails.apartmentNumber,
+            postal_code: this.checkout.paymentDetails.zipCode
+          },
+          name: `${this.checkout.paymentDetails.firstName} ${this.checkout.paymentDetails.lastName}`,
+          phone: this.checkout.paymentDetails.phoneNumber,
+          email: this.checkout.personalDetails.emailAddress
+        }
+      }).then(async (cardResult) => {
+        if (cardResult.error) {
           // Inform the user if there was an error.
           let errorElement = document.getElementById('vsf-stripe-card-errors')
 
-          errorElement.textContent = result.error.message
+          errorElement.textContent = cardResult.error.message
 
           // Stop display loader
           this.$bus.$emit('notification-progress-stop')
         } else {
-          self.placeOrderWithPayload(this.formatTokenPayload(result.paymentMethod))
+          let clientSecret = await this.fetchClientSecret(self.formatTokenPayload(cardResult.paymentMethod))
+          if (!clientSecret) {
+            this.$store.dispatch('notification/spawnNotification', {
+              type: 'error',
+              message: this.$t('Could not fetch client secret, sorry'),
+              action1: { label: this.$t('OK') }
+            })
+            return
+          }
+
+          this.stripe.instance.confirmCardPayment(clientSecret).then((threedResult) => {
+            // console.log('3D',threedResult)
+            // this.stripe.instance.handleCardAction
+            if (threedResult.error) {
+              // Inform the user if there was an error.
+              let errorElement = document.getElementById('vsf-stripe-card-errors')
+
+              errorElement.textContent = threedResult.error.message
+              // console.log(threedResult)
+
+              // Stop display loader 
+              self.$bus.$emit('notification-progress-stop')
+            } else {
+              self.placeOrderWithPayload(this.formatTokenPayload(cardResult.paymentMethod))
+              // console.log(cardResult)
+              
+            }
+          })
         }
       })
     },
@@ -160,6 +208,47 @@ export default {
       } else {
         return token
       }
+    },
+
+    async fetchClientSecret (token) {
+      try {
+        const cartId = this.$store.getters['cart/getCartToken']
+        const userToken = this.$store.getters['user/getUserToken']
+        const { result } = await (await fetch(adjustMultistoreApiUrl(
+          `${config.api.url.endsWith('/') ? config.api.url : config.api.url + '/'}api/ext/stripe/init?token=${userToken}&cartId=${cartId}`),
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              email: this.checkout.personalDetails.emailAddress,
+              paymentMethod: {
+                method: 'stripe_payments',
+                additional_data: token
+              },
+              billingAddress: {
+                firstname: this.checkout.paymentDetails.firstName,
+                lastname: this.checkout.paymentDetails.lastName,
+                country_id: this.checkout.paymentDetails.country,
+                telephone: this.checkout.paymentDetails.phoneNumber,
+                postcode: this.checkout.paymentDetails.zipCode,
+                street: [
+                  this.checkout.paymentDetails.streetAddress,
+                  this.checkout.paymentDetails.apartmentNumber
+                ],
+                telephone: this.checkout.paymentDetails.phoneNumber,
+                city: this.checkout.paymentDetails.city
+              }
+            }),
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          }
+          )).json()
+
+        return result.client_secret
+      } catch (err) {
+        console.log(err)
+      }
+      return
     }
   }
 }
