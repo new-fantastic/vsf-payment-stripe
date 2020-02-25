@@ -181,25 +181,48 @@ export default {
             return
           }
 
-          this.stripe.instance.confirmCardPayment(clientSecret).then((threedResult) => {
-            // console.log('3D',threedResult)
-            // this.stripe.instance.handleCardAction
-            if (threedResult.error) {
-              // Inform the user if there was an error.
-              let errorElement = document.getElementById('vsf-stripe-card-errors')
+          if (clientSecret === true) {
+            // No needed 3ds
+            this.stripe.instance.createPaymentMethod('card', this.stripe.card).then((result) => {
+              if (result.error) {
+                // Inform the user if there was an error.
+                let errorElement = document.getElementById('vsf-stripe-card-errors')
+                errorElement.textContent = result.error.message
+                // Stop display loader
+                this.$bus.$emit('notification-progress-stop')
+                    this.$store.dispatch('notification/spawnNotification', {
+                  type: 'error',
+                  message: this.$t('Could not fetch client secret, sorry'),
+                  action1: { label: this.$t('OK') }
+                })
+                this.processing = false
+                return
+              } else {
+                self.placeOrderWithPayload(this.formatTokenPayload(result.paymentMethod))
+              }
+            })
+          } else if (typeof clientSecret === 'string') {
+            // Needed 3ds
+            this.stripe.instance.confirmCardPayment(clientSecret).then((threedResult) => {
+              // console.log('3D',threedResult)
+              // this.stripe.instance.handleCardAction
+              if (threedResult.error) {
+                // Inform the user if there was an error.
+                let errorElement = document.getElementById('vsf-stripe-card-errors')
 
-              errorElement.textContent = threedResult.error.message
-              // console.log(threedResult)
+                errorElement.textContent = threedResult.error.message
+                // console.log(threedResult)
 
-              // Stop display loader 
-              self.$bus.$emit('notification-progress-stop')
-              this.processing = false
-            } else {
-              self.placeOrderWithPayload(this.formatTokenPayload(cardResult.paymentMethod))
-              // console.log(cardResult)
-              // this.processing = false
-            }
-          })
+                // Stop display loader 
+                self.$bus.$emit('notification-progress-stop')
+                this.processing = false
+              } else {
+                self.placeOrderWithPayload(this.formatTokenPayload(cardResult.paymentMethod))
+                // console.log(cardResult)
+                // this.processing = false
+              }
+            })
+          }
         }
       })
     },
@@ -222,7 +245,7 @@ export default {
       try {
         const cartId = this.$store.getters['cart/getCartToken']
         const userToken = this.$store.getters['user/getUserToken']
-        const { result } = await (await fetch(adjustMultistoreApiUrl(
+        const { code, result } = await (await fetch(adjustMultistoreApiUrl(
           `${config.api.url.endsWith('/') ? config.api.url : config.api.url + '/'}api/ext/stripe/init?token=${userToken}&cartId=${cartId}`),
           {
             method: 'POST',
@@ -252,7 +275,13 @@ export default {
           }
           )).json()
 
-        return result.client_secret
+        if (code === 200) {
+          // no 3ds
+          return true
+        } else if (code === 202) {
+          // 3ds
+          return result.client_secret
+        }
       } catch (err) {
         console.log(err)
       }
