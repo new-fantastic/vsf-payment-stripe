@@ -52,18 +52,13 @@ export default {
       return this.$store.state.checkout
     }
   },
-  watch: {
-    processing (processing) {
-      this.$store.commit('stripe/setProcessing', processing)
-    }
-  },
   beforeMount () {
     this.$bus.$on('order-after-placed', this.onAfterPlaceOrder)
   },
   beforeDestroy () {
     this.$bus.$off('order-after-placed', this.onAfterPlaceOrder)
   },
-  mounted () {
+  mounted () { 
     // Load the stripe.js elements script.
     // As it's callback, Configure stripe to run.
     this.loadStripeDependencies(this.configureStripe)
@@ -77,7 +72,7 @@ export default {
         // unregister the extension placeorder handler
         this.$bus.$off('checkout-before-placeOrder', this.onBeforePlaceOrder)
       }
-    })
+    }) 
   },
   methods: {
     onAfterPlaceOrder () {
@@ -218,7 +213,7 @@ export default {
                 errorElement.textContent = threedResult.error.message
                 // console.log(threedResult)
 
-                // Stop display loader
+                // Stop display loader 
                 self.$bus.$emit('notification-progress-stop')
                 this.processing = false
               } else {
@@ -257,6 +252,7 @@ export default {
             body: JSON.stringify({
               email: this.checkout.personalDetails.emailAddress,
               paymentMethod: {
+                method: 'stripe_payments',
                 additional_data: token
               },
               billingAddress: {
@@ -269,6 +265,7 @@ export default {
                   this.checkout.paymentDetails.streetAddress,
                   this.checkout.paymentDetails.apartmentNumber
                 ],
+                telephone: this.checkout.paymentDetails.phoneNumber,
                 city: this.checkout.paymentDetails.city
               }
             }),
