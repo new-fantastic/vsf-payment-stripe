@@ -41,7 +41,8 @@ export default {
         elements: null,
         card: null
       },
-      processing: false
+      processing: false,
+      formatedCardData: null
     }
   },
   computed: {
@@ -50,6 +51,17 @@ export default {
     }),
     checkout () {
       return this.$store.state.checkout
+    },
+    clientSecret () {
+      return this.$store.state.stripe.clientSecret
+    }
+  },
+  watch: {
+    clientSecret (clientSecret) {
+      // It could be set to null
+      if (clientSecret) {
+        this.check3ds()
+      }
     }
   },
   beforeMount () {
@@ -130,6 +142,7 @@ export default {
     onStripeCardChange (event) {
       let displayError = document.getElementById('vsf-stripe-card-errors')
       displayError.textContent = event.error ? event.error.message : ''
+      console.log('Au')
     },
     beforeDestroy () {
       this.unbindEventListeners()
@@ -170,18 +183,6 @@ export default {
           this.$bus.$emit('notification-progress-stop')
           this.processing = false
         } else {
-          let clientSecret = await this.fetchClientSecret(self.formatTokenPayload(cardResult.paymentMethod))
-          if (!clientSecret) {
-            this.$store.dispatch('notification/spawnNotification', {
-              type: 'error',
-              message: this.$t('Could not fetch client secret, sorry'),
-              action1: { label: this.$t('OK') }
-            })
-            this.processing = false
-            return
-          }
-
-          if (clientSecret === true) {
             // No needed 3ds
             this.stripe.instance.createPaymentMethod('card', this.stripe.card).then((result) => {
               if (result.error) {
@@ -189,45 +190,27 @@ export default {
                 let errorElement = document.getElementById('vsf-stripe-card-errors')
                 errorElement.textContent = result.error.message
                 // Stop display loader
-                this.$bus.$emit('notification-progress-stop')
-                    this.$store.dispatch('notification/spawnNotification', {
+                self.$bus.$emit('notification-progress-stop')
+                    thiselfs.$store.dispatch('notification/spawnNotification', {
                   type: 'error',
-                  message: this.$t('Could not fetch client secret, sorry'),
-                  action1: { label: this.$t('OK') }
+                  message: self.$t('Could not fetch client secret, sorry'),
+                  action1: { label: self.$t('OK') }
                 })
-                this.processing = false
+                self.processing = false
                 return
               } else {
-                self.placeOrderWithPayload(this.formatTokenPayload(result.paymentMethod))
+                self.formatedCardData = self.formatTokenPayload(result.paymentMethod)
+                self.placeOrderWithPayload(self.formatedCardData)
               }
             })
-          } else if (typeof clientSecret === 'string') {
-            // Needed 3ds
-            this.stripe.instance.confirmCardPayment(clientSecret).then((threedResult) => {
-              // console.log('3D',threedResult)
-              // this.stripe.instance.handleCardAction
-              if (threedResult.error) {
-                // Inform the user if there was an error.
-                let errorElement = document.getElementById('vsf-stripe-card-errors')
-
-                errorElement.textContent = threedResult.error.message
-                // console.log(threedResult)
-
-                // Stop display loader 
-                self.$bus.$emit('notification-progress-stop')
-                this.processing = false
-              } else {
-                self.placeOrderWithPayload(this.formatTokenPayload(cardResult.paymentMethod))
-                // console.log(cardResult)
-                // this.processing = false
-              }
-            })
-          }
         }
       })
     },
     placeOrderWithPayload (payload) {
       this.$bus.$emit('checkout-do-placeOrder', payload)
+      // If it requires 3ds auth
+      // ClientSecret will appear in the vuex state
+      // Watcher will see this and run `check3ds` method
     },
     formatTokenPayload (token) {
       let platform = this.stripeConfig.hasOwnProperty('backendPlatform') ? this.stripeConfig.backendPlatform : 'default'
@@ -241,52 +224,74 @@ export default {
       }
     },
 
-    async fetchClientSecret (token) {
-      try {
-        const cartId = this.$store.getters['cart/getCartToken']
-        const userToken = this.$store.getters['user/getUserToken']
-        const { code, result } = await (await fetch(adjustMultistoreApiUrl(
-          `${config.api.url.endsWith('/') ? config.api.url : config.api.url + '/'}api/ext/stripe/init?token=${userToken}&cartId=${cartId}`),
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              email: this.checkout.personalDetails.emailAddress,
-              paymentMethod: {
-                method: 'stripe_payments',
-                additional_data: token
-              },
-              billingAddress: {
-                firstname: this.checkout.paymentDetails.firstName,
-                lastname: this.checkout.paymentDetails.lastName,
-                country_id: this.checkout.paymentDetails.country,
-                telephone: this.checkout.paymentDetails.phoneNumber,
-                postcode: this.checkout.paymentDetails.zipCode,
-                street: [
-                  this.checkout.paymentDetails.streetAddress,
-                  this.checkout.paymentDetails.apartmentNumber
-                ],
-                telephone: this.checkout.paymentDetails.phoneNumber,
-                city: this.checkout.paymentDetails.city
-              }
-            }),
-            headers: {
-              'Content-Type': 'application/json'
-            }
-          }
-          )).json()
+    check3ds () {
+      const self = this
+      // Needed 3ds
+      return this.stripe.instance.confirmCardPayment(this.clientSecret).then((threedResult) => {
+        // console.log('3D',threedResult)
+        // this.stripe.instance.handleCardAction
+        if (threedResult.error) {
+          // Inform the user if there was an error.
+          let errorElement = document.getElementById('vsf-stripe-card-errors')
 
-        if (code === 200) {
-          // no 3ds
-          return true
-        } else if (code === 202) {
-          // 3ds
-          return result.client_secret
+          errorElement.textContent = threedResult.error.message
+
+          // Stop display loader 
+          self.$bus.$emit('notification-progress-stop')
+          this.processing = false
+        } else {
+          self.placeOrderWithPayload(self.formatedCardData)
         }
-      } catch (err) {
-        console.log(err)
-      }
-      return
-    }
+      })
+    },
+
+    // async fetchClientSecret (token) {
+    //   return true
+    //   try {
+    //     const cartId = this.$store.getters['cart/getCartToken']
+    //     const userToken = this.$store.getters['user/getUserToken']
+    //     const { code, result } = await (await fetch(adjustMultistoreApiUrl(
+    //       `${config.api.url.endsWith('/') ? config.api.url : config.api.url + '/'}api/ext/stripe/init?token=${userToken}&cartId=${cartId}`),
+    //       {
+    //         method: 'POST',
+    //         body: JSON.stringify({
+    //           email: this.checkout.personalDetails.emailAddress,
+    //           paymentMethod: {
+    //             method: 'stripe_payments',
+    //             additional_data: token
+    //           },
+    //           billingAddress: {
+    //             firstname: this.checkout.paymentDetails.firstName,
+    //             lastname: this.checkout.paymentDetails.lastName,
+    //             country_id: this.checkout.paymentDetails.country,
+    //             telephone: this.checkout.paymentDetails.phoneNumber,
+    //             postcode: this.checkout.paymentDetails.zipCode,
+    //             street: [
+    //               this.checkout.paymentDetails.streetAddress,
+    //               this.checkout.paymentDetails.apartmentNumber
+    //             ],
+    //             telephone: this.checkout.paymentDetails.phoneNumber,
+    //             city: this.checkout.paymentDetails.city
+    //           }
+    //         }),
+    //         headers: {
+    //           'Content-Type': 'application/json'
+    //         }
+    //       }
+    //       )).json()
+
+    //     if (code === 200) {
+    //       // no 3ds
+    //       return true
+    //     } else if (code === 202) {
+    //       // 3ds
+    //       return result.client_secret
+    //     }
+    //   } catch (err) {
+    //     console.log(err)
+    //   }
+    //   return
+    // }
   }
 }
 </script>
