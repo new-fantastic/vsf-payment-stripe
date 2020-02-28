@@ -54,6 +54,9 @@ export default {
     },
     clientSecret () {
       return this.$store.state.stripe.clientSecret
+    },
+    serverStripeError () {
+      return this.$store.state.stripe.stripeError
     }
   },
   watch: {
@@ -61,6 +64,16 @@ export default {
       // It could be set to null
       if (clientSecret) {
         this.check3ds()
+      }
+    },
+    serverStripeError (serverStripeError) {
+      // It could be set to null
+      if (serverStripeError) {
+        this.onStripeCardChange({
+          error: {
+            message: serverStripeError
+          }
+        })
       }
     }
   },
@@ -142,7 +155,7 @@ export default {
     onStripeCardChange (event) {
       let displayError = document.getElementById('vsf-stripe-card-errors')
       displayError.textContent = event.error ? event.error.message : ''
-      console.log('Au')
+      this.$store.commit('stripe/setClientSecret', null)
     },
     beforeDestroy () {
       this.unbindEventListeners()
@@ -155,7 +168,7 @@ export default {
 
       // Start display loader
       this.$bus.$emit('notification-progress-start', [i18n.t('Placing Order'), '...'].join(''))
-      this.processing = true
+      // this.processing = true
       // Create payment method with Stripe
       this.stripe.instance.createPaymentMethod({
         type: 'card',
@@ -181,7 +194,7 @@ export default {
 
           // Stop display loader
           this.$bus.$emit('notification-progress-stop')
-          this.processing = false
+          // this.processing = false
         } else {
             // No needed 3ds
             this.stripe.instance.createPaymentMethod('card', this.stripe.card).then((result) => {
@@ -196,7 +209,7 @@ export default {
                   message: self.$t('Could not fetch client secret, sorry'),
                   action1: { label: self.$t('OK') }
                 })
-                self.processing = false
+                // self.processing = false
                 return
               } else {
                 self.formatedCardData = self.formatTokenPayload(result.paymentMethod)
@@ -238,60 +251,13 @@ export default {
 
           // Stop display loader 
           self.$bus.$emit('notification-progress-stop')
-          this.processing = false
+          self.$store.commit('stripe/setClientSecret', null)
+          self.$store.commit('stripe/setThreeDsFailed', true)
         } else {
           self.placeOrderWithPayload(self.formatedCardData)
         }
       })
-    },
-
-    // async fetchClientSecret (token) {
-    //   return true
-    //   try {
-    //     const cartId = this.$store.getters['cart/getCartToken']
-    //     const userToken = this.$store.getters['user/getUserToken']
-    //     const { code, result } = await (await fetch(adjustMultistoreApiUrl(
-    //       `${config.api.url.endsWith('/') ? config.api.url : config.api.url + '/'}api/ext/stripe/init?token=${userToken}&cartId=${cartId}`),
-    //       {
-    //         method: 'POST',
-    //         body: JSON.stringify({
-    //           email: this.checkout.personalDetails.emailAddress,
-    //           paymentMethod: {
-    //             method: 'stripe_payments',
-    //             additional_data: token
-    //           },
-    //           billingAddress: {
-    //             firstname: this.checkout.paymentDetails.firstName,
-    //             lastname: this.checkout.paymentDetails.lastName,
-    //             country_id: this.checkout.paymentDetails.country,
-    //             telephone: this.checkout.paymentDetails.phoneNumber,
-    //             postcode: this.checkout.paymentDetails.zipCode,
-    //             street: [
-    //               this.checkout.paymentDetails.streetAddress,
-    //               this.checkout.paymentDetails.apartmentNumber
-    //             ],
-    //             telephone: this.checkout.paymentDetails.phoneNumber,
-    //             city: this.checkout.paymentDetails.city
-    //           }
-    //         }),
-    //         headers: {
-    //           'Content-Type': 'application/json'
-    //         }
-    //       }
-    //       )).json()
-
-    //     if (code === 200) {
-    //       // no 3ds
-    //       return true
-    //     } else if (code === 202) {
-    //       // 3ds
-    //       return result.client_secret
-    //     }
-    //   } catch (err) {
-    //     console.log(err)
-    //   }
-    //   return
-    // }
+    }
   }
 }
 </script>
