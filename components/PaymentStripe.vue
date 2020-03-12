@@ -17,7 +17,6 @@
 
           <!-- Used to display Element errors. -->
           <div id="vsf-stripe-card-errors" role="alert">
-            &nbsp;
           </div>
         </div>
       </form>
