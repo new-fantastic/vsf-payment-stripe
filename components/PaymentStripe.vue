@@ -88,13 +88,13 @@ export default {
     this.loadStripeDependencies(this.configureStripe)
 
     // Ready to place order, handle anything we need to, generating, validating stripe requests & tokens ect.
-    this.$bus.$on('checkout-before-placeOrder', this.onBeforePlaceOrder)
+    this.$bus.$on('checkout-before-placeOrder-stripe', this.onBeforePlaceOrder)
 
     // Ready to place order, handle anything we need to, generating, validating stripe requests & tokens ect.
     this.$bus.$on('checkout-payment-method-changed', (paymentMethodCode) => {
       if (paymentMethodCode !== this.stripeConfig.paymentMethodCode) {
         // unregister the extension placeorder handler
-        this.$bus.$off('checkout-before-placeOrder', this.onBeforePlaceOrder)
+        this.$bus.$off('checkout-before-placeOrder-stripe', this.onBeforePlaceOrder)
       }
     }) 
   },
