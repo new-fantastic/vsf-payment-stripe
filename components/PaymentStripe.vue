@@ -104,6 +104,7 @@ export default {
       this.$bus.$emit('notification-progress-stop')
     },
     onBeforePlaceOrder () {
+      this.$emit('orderProcessed', true)
       if (this.processing) {
         return
       }
@@ -193,6 +194,7 @@ export default {
 
           // Stop display loader
           this.$bus.$emit('notification-progress-stop')
+          this.$emit('orderProcessed', false)
           // this.processing = false
         } else {
             // No needed 3ds
@@ -208,6 +210,7 @@ export default {
                   message: self.$t('Could not fetch client secret, sorry'),
                   action1: { label: self.$t('OK') }
                 })
+                this.$emit('orderProcessed', false)
                 // self.processing = false
                 return
               } else {
