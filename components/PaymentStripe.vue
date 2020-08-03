@@ -82,7 +82,7 @@ export default {
   beforeDestroy () {
     this.$bus.$off('order-after-placed', this.onAfterPlaceOrder)
   },
-  mounted () { 
+  mounted () {
     // Load the stripe.js elements script.
     // As it's callback, Configure stripe to run.
     this.loadStripeDependencies(this.configureStripe)
@@ -96,7 +96,7 @@ export default {
         // unregister the extension placeorder handler
         this.$bus.$off('checkout-before-placeOrder-stripe', this.onBeforePlaceOrder)
       }
-    }) 
+    })
   },
   methods: {
     onAfterPlaceOrder () {
@@ -143,7 +143,8 @@ export default {
       let style = this.stripeConfig.hasOwnProperty('style') ? this.stripeConfig.style : {}
 
       // Create an instance of the card Element.
-      this.stripe.card = this.stripe.elements.create('card', { style: style })
+      this.stripe.card = this.stripe.elements.create('card', { hidePostalCode: true, style: style }
+      )
 
       // Add an instance of the card Element into the `card-element` <div>.
       this.stripe.card.mount('#vsf-stripe-card-element')
@@ -251,7 +252,7 @@ export default {
 
           errorElement.textContent = threedResult.error.message
 
-          // Stop display loader 
+          // Stop display loader
           self.$bus.$emit('notification-progress-stop')
           self.$store.commit('stripe/setClientSecret', null)
           self.$store.commit('stripe/setThreeDsFailed', true)
